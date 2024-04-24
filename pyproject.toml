@@ -1,0 +1,17 @@
+[project]
+    name = "hf-fuyu"
+    version = "0.0.0"
+    description = "Patched adept/fuyu-8b"
+    authors = [{ name = "graham", email = "graham.annett@gmail.com" }]
+    dependencies = ["Pillow>=10.3.0"]
+    requires-python = ">=3.11"
+    readme = "README.md"
+    license = { text = "None" }
+
+[build-system]
+    requires = ["pdm-backend"]
+    build-backend = "pdm.backend"
+
+
+[tool.pdm]
+    distribution = true
