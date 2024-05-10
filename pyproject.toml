@@ -3,7 +3,10 @@
     version = "0.0.0"
     description = "Patched adept/fuyu-8b"
     authors = [{ name = "graham", email = "graham.annett@gmail.com" }]
-    dependencies = ["Pillow>=10.3.0"]
+    dependencies = [
+        "Pillow>=10.3.0",
+        "transformers[torch]>=4.40.2",
+    ]
     requires-python = ">=3.11"
     readme = "README.md"
     license = { text = "None" }
@@ -15,3 +18,8 @@
 
 [tool.pdm]
     distribution = true
+
+[tool.pdm.dev-dependencies]
+test = [
+    "pytest>=8.2.0",
+]
