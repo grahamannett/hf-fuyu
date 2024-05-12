@@ -1,13 +1,13 @@
 import io
-import unittest
 import os
+import unittest
 
 import requests
 import torch
-
-from tests.fixtures.mock_dataset import MockDataset
 from PIL import Image
 from transformers import FuyuProcessor
+
+from tests.fixtures.mock_dataset import MockDataset
 
 MODEL_ID = "adept/fuyu-8b"
 
@@ -22,6 +22,10 @@ bbox_image_url = (
     "https://huggingface.co/datasets/hf-internal-testing/fixtures-captioning/resolve/main/bbox_sample_image.jpeg"
 )
 bbox_image_pil = Image.open(io.BytesIO(requests.get(bbox_image_url).content))
+
+# allow for image/word size from env, maybe parameterize later
+img_size = tuple(map(int, os.environ.get("IMG_SIZE", "1290,1080").split(",")))
+num_words = tuple(map(int, os.environ.get("NUM_WORDS", "100").split(",")))
 
 
 def get_model_config_kwargs():
@@ -68,7 +72,7 @@ class TestHF(unittest.TestCase):
         self.assertTrue("Williams" in prediction)
 
 
-class TestModel(unittest.TestCase):
+class TestPatchedModel(unittest.TestCase):
     def test_text_extract(self):
         from hf_fuyu.model.modeling_fuyu import FuyuForCausalLM
 
@@ -97,22 +101,22 @@ class TestForward(unittest.TestCase):
             self.assertTrue(model_outputs.loss is not None)
 
     def test_hf(self):
-        from transformers import FuyuProcessor, FuyuForCausalLM, FuyuConfig
+        from transformers import FuyuConfig, FuyuForCausalLM, FuyuProcessor
 
         model_config = FuyuConfig.from_pretrained(MODEL_ID, **get_model_config_kwargs())
         model = FuyuForCausalLM.from_pretrained(MODEL_ID, device_map="auto", config=model_config)
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
-        ds = MockDataset(img_size=(1290, 1080))
+        ds = MockDataset(img_size=img_size, num_words=num_words)
 
         self.run_forward(model, ds, processor)
 
     def test_patched(self):
         from hf_fuyu.model.modeling_fuyu import FuyuForCausalLM
-        from transformers import FuyuProcessor, FuyuConfig
+        from transformers import FuyuConfig, FuyuProcessor
 
+        ds = MockDataset(img_size=img_size, num_words=num_words)
         model_config = FuyuConfig.from_pretrained(MODEL_ID, **get_model_config_kwargs())
         model = FuyuForCausalLM.from_pretrained(MODEL_ID, device_map="auto", config=model_config)
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
-        ds = MockDataset(img_size=(1290, 1080))
 
         self.run_forward(model, ds, processor)

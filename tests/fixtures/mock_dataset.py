@@ -20,8 +20,8 @@ class MockDataset(torch.utils.data.Dataset):
         self.num_iters = num_iters
 
         # just repeat it so random.randint can work for both words and size
-        if isinstance(num_words, int):
-            num_words = (num_words, num_words)
+        if len(num_words) == 1:
+            num_words = (num_words[0], num_words[0])
 
         if isinstance(img_size[0], int):
             img_size = [[img_size[0], img_size[0]], [img_size[1], img_size[1]]]
@@ -40,8 +40,8 @@ class MockDataset(torch.utils.data.Dataset):
 
     def _make_image_dim(self) -> tuple[int, int]:
         return [
-            random.randint(*self.image_height),  # H
-            random.randint(*self.image_width),  # W
+            random.randint(*self.image_height),
+            random.randint(*self.image_width),
         ]
 
     def generate(self):
