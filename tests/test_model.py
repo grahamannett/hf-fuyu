@@ -1,9 +1,11 @@
 import io
 import unittest
+import os
 
 import requests
 import torch
 
+from tests.fixtures.mock_dataset import MockDataset
 from PIL import Image
 from transformers import FuyuProcessor
 
@@ -16,15 +18,23 @@ pretrained_kwargs = {
 }
 
 bbox_prompt = "When presented with a box, perform OCR to extract text contained within it. If provided with text, generate the corresponding bounding box.\\n<box>388, 428, 404, 488</box>"
-bbox_image_url = "https://huggingface.co/datasets/hf-internal-testing/fixtures-captioning/resolve/main/bbox_sample_image.jpeg"
+bbox_image_url = (
+    "https://huggingface.co/datasets/hf-internal-testing/fixtures-captioning/resolve/main/bbox_sample_image.jpeg"
+)
 bbox_image_pil = Image.open(io.BytesIO(requests.get(bbox_image_url).content))
 
 
-class TestModel(unittest.TestCase):
-    def test_model(self):
-        self.assertTrue(True)
+def get_model_config_kwargs():
+    if os.getenv("FEWGPU"):
+        return {
+            "num_hidden_layers": 1,
+            "text_config": {"model_type": "persimmon", "num_hidden_layers": 1},
+        }
+    return {}
 
-    def test_basemodel_fail(self):
+
+class TestHF(unittest.TestCase):
+    def test_text_extract(self):
         from transformers import FuyuForCausalLM
 
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
@@ -34,15 +44,31 @@ class TestModel(unittest.TestCase):
 
         generated_tokens = model.generate(**model_inputs, max_new_tokens=10)
 
-        model_outputs = processor.batch_decode(
-            generated_tokens[:, -10:], skip_special_tokens=True
-        )[0]
-        prediction = (
-            model_outputs.split("\x04", 1)[1] if "\x04" in model_outputs else ""
-        )
+        model_outputs = processor.batch_decode(generated_tokens[:, -10:], skip_special_tokens=True)[0]
+        prediction = model_outputs.split("\x04", 1)[1] if "\x04" in model_outputs else ""
         self.assertTrue("\x04" in model_outputs)
         self.assertTrue("Williams" in prediction)
 
+    def test_basemodel_fail(self):
+        from transformers import FuyuForCausalLM
+
+        processor = FuyuProcessor.from_pretrained(MODEL_ID)
+        model = FuyuForCausalLM.from_pretrained(MODEL_ID, **pretrained_kwargs)
+
+        model_inputs = processor(text=bbox_prompt, images=bbox_image_pil).to("cuda")
+
+        with torch.no_grad():
+            model_outputs = model(**model_inputs)
+
+        generated_tokens = model.generate(**model_inputs, max_new_tokens=10)
+
+        model_outputs = processor.batch_decode(generated_tokens[:, -10:], skip_special_tokens=True)[0]
+        prediction = model_outputs.split("\x04", 1)[1] if "\x04" in model_outputs else ""
+        self.assertTrue("\x04" in model_outputs)
+        self.assertTrue("Williams" in prediction)
+
+
+class TestModel(unittest.TestCase):
     def test_text_extract(self):
         from hf_fuyu.model.modeling_fuyu import FuyuForCausalLM
 
@@ -53,11 +79,40 @@ class TestModel(unittest.TestCase):
 
         generated_tokens = model.generate(**model_inputs, max_new_tokens=10)
 
-        model_outputs = processor.batch_decode(
-            generated_tokens[:, -10:], skip_special_tokens=True
-        )[0]
-        prediction = (
-            model_outputs.split("\x04", 1)[1] if "\x04" in model_outputs else ""
-        )
+        model_outputs = processor.batch_decode(generated_tokens[:, -10:], skip_special_tokens=True)[0]
+        prediction = model_outputs.split("\x04", 1)[1] if "\x04" in model_outputs else ""
         self.assertTrue("\x04" in model_outputs)
         self.assertTrue("Williams" in prediction)
+
+
+class TestForward(unittest.TestCase):
+    def run_forward(self, model, ds, processor, n=5):
+        for i in range(n):
+            sample = ds[i]
+            model_inputs = processor(**sample)
+            model_inputs["labels"] = model_inputs["input_ids"].clone()
+            model_inputs.to(model.device)
+            model_outputs = model(**model_inputs)
+
+            self.assertTrue(model_outputs.loss is not None)
+
+    def test_hf(self):
+        from transformers import FuyuProcessor, FuyuForCausalLM, FuyuConfig
+
+        model_config = FuyuConfig.from_pretrained(MODEL_ID, **get_model_config_kwargs())
+        model = FuyuForCausalLM.from_pretrained(MODEL_ID, device_map="auto", config=model_config)
+        processor = FuyuProcessor.from_pretrained(MODEL_ID)
+        ds = MockDataset(img_size=(1290, 1080))
+
+        self.run_forward(model, ds, processor)
+
+    def test_patched(self):
+        from hf_fuyu.model.modeling_fuyu import FuyuForCausalLM
+        from transformers import FuyuProcessor, FuyuConfig
+
+        model_config = FuyuConfig.from_pretrained(MODEL_ID, **get_model_config_kwargs())
+        model = FuyuForCausalLM.from_pretrained(MODEL_ID, device_map="auto", config=model_config)
+        processor = FuyuProcessor.from_pretrained(MODEL_ID)
+        ds = MockDataset(img_size=(1290, 1080))
+
+        self.run_forward(model, ds, processor)
