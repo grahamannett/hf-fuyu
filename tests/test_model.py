@@ -28,6 +28,15 @@ img_size = tuple(map(int, os.environ.get("IMG_SIZE", "1290,1080").split(",")))
 num_words = tuple(map(int, os.environ.get("NUM_WORDS", "100").split(",")))
 
 
+def print_sample_info(sample, processor, model_key=False):
+    if model_key:
+        print(model_key)
+
+    inputs = processor(**sample)
+    for k, v in inputs.items():
+        print(f"{k}.shape: {v.shape if isinstance(v, torch.Tensor) else len(v)}")
+
+
 def get_model_config_kwargs():
     if os.getenv("FEWGPU"):
         return {
@@ -107,7 +116,7 @@ class TestForward(unittest.TestCase):
         model = FuyuForCausalLM.from_pretrained(MODEL_ID, device_map="auto", config=model_config)
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
         ds = MockDataset(img_size=img_size, num_words=num_words)
-
+        print_sample_info(ds[0], processor, model_key="hf")
         self.run_forward(model, ds, processor)
 
     def test_patched(self):
@@ -118,5 +127,5 @@ class TestForward(unittest.TestCase):
         model_config = FuyuConfig.from_pretrained(MODEL_ID, **get_model_config_kwargs())
         model = FuyuForCausalLM.from_pretrained(MODEL_ID, device_map="auto", config=model_config)
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
-
+        print_sample_info(ds[0], processor, model_key="patched")
         self.run_forward(model, ds, processor)
