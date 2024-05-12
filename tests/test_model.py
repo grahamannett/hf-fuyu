@@ -12,9 +12,9 @@ from tests.fixtures.mock_dataset import MockDataset
 MODEL_ID = "adept/fuyu-8b"
 
 
-pretrained_kwargs = {
+model_kwargs = {
     "device_map": "auto",
-    "torch_dtype": torch.float16,
+    "torch_dtype": torch.bfloat16,
 }
 
 bbox_prompt = "When presented with a box, perform OCR to extract text contained within it. If provided with text, generate the corresponding bounding box.\\n<box>388, 428, 404, 488</box>"
@@ -30,7 +30,7 @@ num_words = tuple(map(int, os.environ.get("NUM_WORDS", "100").split(",")))
 
 def print_sample_info(sample, processor, model_key=False):
     if model_key:
-        print(model_key)
+        print(f"MODEL_KEY={model_key}")
 
     inputs = processor(**sample)
     for k, v in inputs.items():
@@ -38,6 +38,7 @@ def print_sample_info(sample, processor, model_key=False):
 
 
 def get_model_config_kwargs():
+    # chop model for local dev
     if os.getenv("FEWGPU"):
         return {
             "num_hidden_layers": 1,
@@ -51,7 +52,7 @@ class TestHF(unittest.TestCase):
         from transformers import FuyuForCausalLM
 
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
-        model = FuyuForCausalLM.from_pretrained(MODEL_ID, **pretrained_kwargs)
+        model = FuyuForCausalLM.from_pretrained(MODEL_ID, **model_kwargs)
 
         model_inputs = processor(text=bbox_prompt, images=bbox_image_pil).to("cuda")
 
@@ -66,7 +67,7 @@ class TestHF(unittest.TestCase):
         from transformers import FuyuForCausalLM
 
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
-        model = FuyuForCausalLM.from_pretrained(MODEL_ID, **pretrained_kwargs)
+        model = FuyuForCausalLM.from_pretrained(MODEL_ID, **model_kwargs)
 
         model_inputs = processor(text=bbox_prompt, images=bbox_image_pil).to("cuda")
 
@@ -86,7 +87,7 @@ class TestPatchedModel(unittest.TestCase):
         from hf_fuyu.model.modeling_fuyu import FuyuForCausalLM
 
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
-        model = FuyuForCausalLM.from_pretrained(MODEL_ID, **pretrained_kwargs)
+        model = FuyuForCausalLM.from_pretrained(MODEL_ID, **model_kwargs)
 
         model_inputs = processor(text=bbox_prompt, images=bbox_image_pil).to("cuda")
 
@@ -113,7 +114,7 @@ class TestForward(unittest.TestCase):
         from transformers import FuyuConfig, FuyuForCausalLM, FuyuProcessor
 
         model_config = FuyuConfig.from_pretrained(MODEL_ID, **get_model_config_kwargs())
-        model = FuyuForCausalLM.from_pretrained(MODEL_ID, device_map="auto", config=model_config)
+        model = FuyuForCausalLM.from_pretrained(MODEL_ID, config=model_config, **model_kwargs)
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
         ds = MockDataset(img_size=img_size, num_words=num_words)
         print_sample_info(ds[0], processor, model_key="hf")
@@ -125,7 +126,7 @@ class TestForward(unittest.TestCase):
 
         ds = MockDataset(img_size=img_size, num_words=num_words)
         model_config = FuyuConfig.from_pretrained(MODEL_ID, **get_model_config_kwargs())
-        model = FuyuForCausalLM.from_pretrained(MODEL_ID, device_map="auto", config=model_config)
+        model = FuyuForCausalLM.from_pretrained(MODEL_ID, config=model_config, **model_kwargs)
         processor = FuyuProcessor.from_pretrained(MODEL_ID)
         print_sample_info(ds[0], processor, model_key="patched")
         self.run_forward(model, ds, processor)
